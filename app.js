@@ -1,6 +1,6 @@
 /* =========================================================
  * 梦境手记 · 前端逻辑
- * 数据保存在浏览器 localStorage；AI 解读通过 /api/chat 安全调用。
+ * 数据保存在浏览器 localStorage；AI 解读优先由浏览器直连 DeepSeek。
  * ========================================================= */
 
 'use strict';
@@ -24,22 +24,18 @@ const SYSTEM_PROMPT = `你是「梦境手记」的解梦助手，一位温和、
 问题二的简短问法|选项1|选项2|选项3|说不清
 <</OPTIONS>>
    每个问题给 2 至 4 个短选项，每个选项不超过 8 个字，选项要贴合该问题最可能出现的回答，问题数量与上面列出的问题一致。除追问之外，正常解读里绝对不要出现这个块。
-2. 生成解读报告时，使用以下结构（Markdown 二级标题）：
-## 梦境主线
-（一两句话复述梦的主线，确认没有遗漏关键情节）
-## 情绪脉络
-（分析梦里情绪的起伏变化）
-## 核心意象
-（挑选2至4个真正重要的意象或冲突，结合用户的个人联想说明它们可能意味着什么）
-## 几种可能的理解
-（给出2至3种不同但合理的解读角度，每种都说明依据了哪些梦境细节；不要为凑数强行解释）
-## 与现实生活的可能联系
-（温和地提出假设，明确这是假设而非定论）
-## 可以带着思考的问题
-（1至2个供用户自我反思的问题）
-## 一句温和的总结
-（简短、不绝对、有陪伴感）
-3. 用户可以追问、补充或否定你的解读。被否定时不要坚持，结合新信息修正。
+2. 生成解读报告时，默认采用"简洁解读 + 折叠详细分析"，不要写成论文，严格遵守下面的顺序和标记：
+   第一段不加标题，用2至4句话直接说出这个梦最值得注意的一点，以及它可能与什么感受或矛盾有关。不要复述整个梦，不要以"这个梦反映了"等空话开头，不要使用"梦境主线"之类的标题。
+   然后输出：
+**为什么这么理解**
+（只列2条最重要的依据，每条1至2句。必须同时联系具体梦境细节与用户补充的情绪、联想或现实处境；不要罗列所有意象，不要讲抽象理论。）
+**另一种可能**
+（用1个短段落补充一种真正不同的理解，100字以内。可以考虑近期的记忆碎片、身体疲劳或压力等普通解释。没有足够依据时就坦承不确定，不为凑数强行解释。）
+**留给你一个问题**
+（只留1个具体、容易回答、能帮助用户进一步理解自己的问题，不要写成作业，不要空泛地问"你怎么看"。）
+## 详细分析
+（此处之后再给详细内容，供页面默认折叠。只保留"情绪与冲突""关键意象""其他理解与不确定之处"三个三级标题。总长度控制在350至600字，不重复前面的原句，不堆砌理论，不强行给建议。）
+3. 已经生成过报告后，用户追问、补充或否定时，默认只用80至250字自然回应，聚焦当前问题，不要重新输出整篇报告结构。被否定时不要坚持，结合新信息修正；只有用户明确要求"重新解读"或"重新生成报告"时，才重新按第2条结构输出。
 4. 如果用户提到反复噩梦、长期失眠、明显影响生活，温和建议关注睡眠与心理状态，必要时寻求专业帮助，但不夸大一两次梦境的意义。
 
 语言温暖、真诚、平静，详细但不堆砌，像一位值得信任的朋友在深夜里陪用户说话。全程使用中文。`;
@@ -514,15 +510,39 @@ function mdToPlain(md) {
     .trim();
 }
 
+/* 将默认展示的简洁解读与可折叠的详细分析分开 */
+const DETAIL_HEADING_RE = /^##\s*(?:详细分析|更多细节)\s*$/m;
+
+function splitReportDetails(content) {
+  const text = content || '';
+  const m = DETAIL_HEADING_RE.exec(text);
+  if (!m) return { main: text, details: '' };
+  return {
+    main: text.slice(0, m.index).trim(),
+    details: text.slice(m.index + m[0].length).trim(),
+  };
+}
+
+function interpretationHtml(content) {
+  const sections = splitReportDetails(content);
+  let html = renderMarkdown(sections.main);
+  if (sections.details) {
+    html += `<details class="analysis-details"><summary><span class="summary-closed">展开更多细节</span><span class="summary-open">收起详细分析</span></summary><div class="analysis-detail-body">${renderMarkdown(sections.details)}</div></details>`;
+  }
+  return html;
+}
+
 /* 是否是一篇完整报告（含 Markdown 小标题） */
 function isReport(content) {
   const t = (content || '');
-  return /^##\s/m.test(t) && /梦境主线|情绪脉络|核心意象/.test(t);
+  return DETAIL_HEADING_RE.test(t) || (/^##\s/m.test(t) && /梦境主线|情绪脉络|核心意象/.test(t));
 }
 
-/* 截出报告正文：从第一个 "## " 小标题开始，去掉追问选项块 */
+/* 新版只复制第一屏的简洁解读；旧版仍从第一个小标题开始复制 */
 function reportText(content) {
   const body = splitOptions(content).text;
+  const sections = splitReportDetails(body);
+  if (sections.details) return mdToPlain(sections.main);
   const at = body.search(/^##\s/m);
   return mdToPlain(at >= 0 ? body.slice(at) : body);
 }
@@ -562,7 +582,7 @@ function renderChatMessages(dream, keepScroll) {
     const isLast = i === dream.messages.length - 1;
     const body = m.pending && !m.content
       ? '<p class="typing">正在读你的梦 ……</p>'
-      : renderMarkdown(parts.text) + (m.pending ? '<p class="typing">▍</p>' : '') +
+      : interpretationHtml(parts.text) + (m.pending ? '<p class="typing">▍</p>' : '') +
         optionsHtml(parts.options, i, parts.text, m.pending || !isLast);
     return `<div class="msg assistant">${body}${msgActionsHtml(dream, m, i)}</div>`;
   }).join('');
@@ -723,7 +743,7 @@ function openDreamDetail(id) {
     ? msgs.map((m, i) => {
         const parts = splitOptions(m.content);
         const copy = isReport(m.content) ? `<button class="dm-copy" type="button" data-dmi="${i}">复制</button>` : '';
-        return `<div class="dm"><div class="dm-role">解读 ${i + 1}${m.feedback ? ' · ' + ({ resonant: '有共鸣', unsure: '不确定', notme: '不太像我' }[m.feedback] || '') : ''}${copy}</div>${renderMarkdown(parts.text)}</div>`;
+        return `<div class="dm"><div class="dm-role">解读 ${i + 1}${m.feedback ? ' · ' + ({ resonant: '有共鸣', unsure: '不确定', notme: '不太像我' }[m.feedback] || '') : ''}${copy}</div>${interpretationHtml(parts.text)}</div>`;
       }).join('')
     : '<p class="empty-sub">还没有解读记录。</p>';
   $('#detail-messages').querySelectorAll('[data-dmi]').forEach(btn => btn.addEventListener('click', async () => {
