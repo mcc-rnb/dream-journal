@@ -274,3 +274,24 @@ textarea{resize:vertical;min-height:44px}
   border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:14px;
   font-family:inherit;outline:none}
 #key-input:focus{border-color:var(--accent)}
+
+/* ===== 简洁解读 + 按需展开的详细分析 ===== */
+.msg.assistant{line-height:1.8}
+.msg.assistant > p:first-child{font-size:16px;line-height:1.85;color:#fff}
+.msg.assistant strong{color:var(--warm);font-weight:600}
+.msg.assistant p{margin:9px 0}
+.msg.assistant ul{margin:6px 0 10px;padding-left:20px}
+.msg.assistant li{margin:5px 0}
+.analysis-details{margin-top:14px;padding-top:10px;border-top:1px solid rgba(169,163,199,.22)}
+.analysis-details summary{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:7px 0;color:var(--accent);font-size:13.5px;cursor:pointer;list-style:none;user-select:none}
+.analysis-details summary::-webkit-details-marker{display:none}
+.analysis-details summary::after{content:'＋';font-size:18px;line-height:1;color:var(--text-dim)}
+.analysis-details[open] summary::after{content:'−'}
+.analysis-details .summary-open{display:none}
+.analysis-details[open] .summary-closed{display:none}
+.analysis-details[open] .summary-open{display:inline}
+.analysis-detail-body{padding-top:4px;color:var(--text-dim);font-size:14px}
+.analysis-detail-body h3{margin:16px 0 6px;color:var(--text);font-size:14.5px}
+.analysis-detail-body p{margin:8px 0}
+.detail-messages .analysis-details summary{font-size:12.5px}
