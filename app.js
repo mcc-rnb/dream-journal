@@ -1,6 +1,6 @@
 /* =========================================================
  * 梦境手记 · 前端逻辑
- * 数据保存在浏览器 localStorage；AI 解读优先由浏览器直连 DeepSeek。
+ * 仅主动保存的梦境写入 localStorage；未保存的梦只存在当前页面内存中。
  * ========================================================= */
 
 'use strict';
@@ -94,7 +94,7 @@ function perspectiveOf(m) { return (m && PERSPECTIVES[m.perspective]) ? m.perspe
 
 /* 民俗语料独立存放，只有用户主动选择「古人怎么说」时才检索并注入。 */
 let FOLK_CORPUS = [];
-const folkCorpusReady = fetch('folk-corpus.json?v=20261126h')
+const folkCorpusReady = fetch('folk-corpus.json?v=20261126i')
   .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(d => { FOLK_CORPUS = Array.isArray(d.entries) ? d.entries : []; })
   .catch(() => { FOLK_CORPUS = []; });
@@ -125,12 +125,20 @@ function loadData() {
 function saveData() { localStorage.setItem(STORE_KEY, JSON.stringify(state.data)); }
 
 const state = {
-  data: loadData(),
+  data: loadData(),          // 只有主动保存的梦
+  sessionDreams: [],         // 直接解读的梦：仅本次打开期间存在
   view: 'home',
   activeDreamId: null,
   sending: false,
   editingId: null,
 };
+
+function findDream(id) {
+  return state.sessionDreams.find(d => d.id === id) || state.data.dreams.find(d => d.id === id) || null;
+}
+function isDreamSaved(dream) {
+  return !!dream && state.data.dreams.some(d => d.id === dream.id);
+}
 
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => Array.from(document.querySelectorAll(sel));
@@ -250,11 +258,6 @@ function renderGreeting() {
 
 function renderHome() {
   renderGreeting();
-  const recent = [...state.data.dreams].sort((a, b) => b.createdAt - a.createdAt).slice(0, 3);
-  $('#recent-list').innerHTML = recent.length
-    ? recent.map(dreamItemHtml).join('')
-    : '<p class="empty-sub">还没有记录。第一个梦，从上面开始。</p>';
-  bindDreamItems($('#recent-list'));
 }
 
 function dreamItemHtml(d) {
@@ -304,24 +307,28 @@ function saveDream(startChat) {
     const d = state.data.dreams.find(x => x.id === state.editingId);
     if (d) Object.assign(d, f);
     state.editingId = null;
-    $('#btn-save-chat').textContent = '保存并开始解读';
-    $('#btn-save').textContent = '仅保存';
-    toast('已保存修改');
+    $('#btn-save-chat').textContent = '开始解读';
+    $('#btn-save').textContent = '保存到档案';
+    toast('修改已保存');
     saveData(); resetForm();
     if (startChat && d) { state.activeDreamId = d.id; showView('chat'); }
     else showView('archive');
     return;
   }
   const dream = { id: uid(), createdAt: Date.now(), messages: [], ...f };
-  state.data.dreams.push(dream);
-  saveData(); resetForm();
-  toast('梦已收进档案 🌙');
+  resetForm();
   if (startChat) {
+    /* 默认不保存：新梦只进入内存，刷新或关闭页面后即消失。 */
+    state.sessionDreams.push(dream);
     state.activeDreamId = dream.id;
     showView('chat');
     startInterpretation(dream, 'ask');
   } else {
+    /* 只有用户主动点「保存到档案」才写入 localStorage。 */
+    state.data.dreams.push(dream);
+    saveData();
     renderHome();
+    toast('已保存到档案，可在「我的」里查看');
   }
 }
 $('#btn-save').addEventListener('click', () => saveDream(false));
@@ -355,7 +362,7 @@ $('#btn-save-chat').addEventListener('click', () => saveDream(true));
 
 /* ---------- 解读对话 ---------- */
 function getActiveDream() {
-  return state.data.dreams.find(d => d.id === state.activeDreamId) || null;
+  return findDream(state.activeDreamId);
 }
 
 function buildInitialMessages(dream, mode) {
@@ -807,6 +814,7 @@ function renderChatMessages(dream, keepScroll) {
     $('#chat-input').value = '跳过追问，直接解读吧';
     sendUserMessage();
   }));
+  renderRecordActions(dream);
   if (keepScroll) {
     /* 点按钮这类局部刷新：页面停在原处，不往回跳 */
     window.scrollTo({ top: winY, behavior: 'auto' });
@@ -852,11 +860,56 @@ function regenerate(dream) {
   runAssistant(dream, { perspective, report: true });
 }
 
+function renderRecordActions(dream) {
+  const bar = $('#chat-record-actions');
+  if (!bar) return;
+  if (!dream) { bar.hidden = true; return; }
+  const saved = isDreamSaved(dream);
+  bar.hidden = false;
+  $('#record-save-state').textContent = saved
+    ? '已保存 · 可在「我的 → 梦境档案」里找到'
+    : '未保存 · 刷新或关闭页面后就会消失';
+  const saveBtn = $('#btn-archive-active');
+  saveBtn.hidden = saved;
+  saveBtn.disabled = state.sending;
+  $('#btn-delete-active').disabled = state.sending;
+}
+
+$('#btn-archive-active').addEventListener('click', () => {
+  const dream = getActiveDream();
+  if (!dream || state.sending || isDreamSaved(dream)) return;
+  state.sessionDreams = state.sessionDreams.filter(d => d.id !== dream.id);
+  state.data.dreams.push(dream);
+  saveData();
+  renderRecordActions(dream);
+  toast('已保存到档案，可在「我的」里查看');
+});
+
+$('#btn-delete-active').addEventListener('click', async () => {
+  const dream = getActiveDream();
+  if (!dream || state.sending) return;
+  const ok = await confirmModal('确定删除这个梦和它的全部解读吗？删除后无法恢复。');
+  if (!ok) return;
+  const saved = isDreamSaved(dream);
+  state.sessionDreams = state.sessionDreams.filter(d => d.id !== dream.id);
+  if (saved) {
+    state.data.dreams = state.data.dreams.filter(d => d.id !== dream.id);
+    saveData();
+  }
+  if (detailId === dream.id) closeDetail();
+  if (state.editingId === dream.id) state.editingId = null;
+  state.activeDreamId = null;
+  $('#chat-input').value = '';
+  showView('chat');
+  toast('已删除，没有留下档案');
+});
+
 function renderChat() {
   const dream = getActiveDream();
   const empty = $('#chat-empty'), main = $('#chat-main');
   if (!dream) {
     empty.hidden = false; main.hidden = true;
+    renderRecordActions(null);
     const undiscussed = [...state.data.dreams].sort((a, b) => b.createdAt - a.createdAt).slice(0, 5);
     $('#chat-pick').innerHTML = undiscussed.length
       ? undiscussed.map(dreamItemHtml).join('')
@@ -1119,6 +1172,7 @@ $('#import-file').addEventListener('change', async (e) => {
     const ok = await confirmModal(`备份里有 ${d.dreams.length} 个梦。导入会覆盖当前全部数据，确定继续吗？（建议先导出当前备份）`);
     if (!ok) return;
     state.data = { dreams: d.dreams, weeklyCache: d.weeklyCache || null };
+    state.sessionDreams = [];
     state.activeDreamId = null;
     saveData(); showView('home');
     toast('导入完成');
@@ -1132,7 +1186,10 @@ $('#btn-clear').addEventListener('click', async () => {
   const ok2 = await confirmModal('再次确认：所有梦和解读都会被删除。建议先导出备份。仍要清空吗？');
   if (!ok2) return;
   state.data = { dreams: [], weeklyCache: null };
+  state.sessionDreams = [];
   state.activeDreamId = null;
+  state.editingId = null;
+  closeDetail();
   saveData(); showView('home');
   toast('已清空');
 });
