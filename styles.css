@@ -239,3 +239,38 @@ textarea{resize:vertical;min-height:44px}
   #app{padding-bottom:100px}
   .tabbar{left:50%;transform:translateX(-50%);max-width:720px;border-radius:20px 20px 0 0}
 }
+
+/* 修复：显式声明的 display 会覆盖 [hidden]，导致弹窗常驻 */
+[hidden]{display:none !important}
+
+/* ===== 追问选项：可直接点选 ===== */
+.opt-panel{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:14px;
+  background:rgba(34,42,82,.55)}
+.opt-group{margin-bottom:12px}
+.opt-q{font-size:13px;color:var(--text-dim);margin-bottom:8px}
+.opt-chips{display:flex;flex-wrap:wrap;gap:8px}
+.opt-chip{border:1px solid var(--line);background:var(--card2);color:var(--text);
+  font-size:14px;padding:7px 13px;border-radius:999px;cursor:pointer;transition:all .15s ease}
+.opt-chip:active{transform:scale(.97)}
+.opt-chip.picked{border-color:var(--accent);background:rgba(167,139,250,.22);color:#fff}
+.opt-skip{width:100%;margin-top:2px;padding:9px;border-radius:12px;cursor:pointer;
+  border:1px dashed var(--line);background:transparent;color:var(--text-dim);font-size:13px}
+.opt-skip:hover{color:var(--text);border-color:var(--accent)}
+
+/* 常驻“直接出报告”快捷按钮 */
+.chat-quick{padding:0 14px 8px}
+.chat-quick button{width:100%;padding:9px;border-radius:12px;cursor:pointer;
+  border:1px solid var(--line);background:rgba(167,139,250,.10);color:var(--accent);font-size:13px}
+.chat-quick button:active{background:rgba(167,139,250,.20)}
+
+/* 档案里每条解读的复制按钮 */
+.detail-messages .dm-role{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.detail-messages .dm-copy{margin-left:auto;border:1px solid var(--line);background:transparent;
+  color:var(--text-dim);font-size:11.5px;padding:2px 8px;border-radius:999px;cursor:pointer}
+.detail-messages .dm-copy:active{color:var(--accent);border-color:var(--accent)}
+
+/* 密钥输入框 */
+#key-input{width:100%;padding:11px 13px;margin:6px 0 10px;border-radius:12px;
+  border:1px solid var(--line);background:var(--bg);color:var(--text);font-size:14px;
+  font-family:inherit;outline:none}
+#key-input:focus{border-color:var(--accent)}
