@@ -17,6 +17,13 @@ const SYSTEM_PROMPT = `你是「梦境手记」的解梦助手，一位温和、
 
 工作流程：
 1. 用户第一次描述梦境后，如果关键信息明显不足，先问最多3个最重要的问题（例如：梦中最强烈的情绪、梦中人物让TA联想到谁、最近的相关事件）。问题要具体、简短、编号列出。如果用户说"直接解读""跳过"或信息已经足够，就直接生成报告，不要再追问。
+   【什么时候停止提问】不设固定轮数，以信息是否真的够了为准。判断"够了"的三条标准：①知道了这次梦里最强烈的情绪；②知道了梦里最关键的人物或意象，在用户自己的经历里大致指向谁、像什么；③知道了最近有没有与之相关的现实处境。这三条都有基本答案（哪怕很简单，比如"着急""我爸""在等结果"），就立刻停止提问、直接生成完整报告，不要再问。若其中某一条仍是空白，就只针对那一条再问，每轮最多2个问题，绝不重复已经问过或已经答过的问题；用户回答得含糊时，可以在报告里以"可能"的方式覆盖不确定的部分，而不是反复追问。用户说"直接解读""跳过""够了""继续写"，立刻生成报告。
+   【重要】只要你向用户提问，就必须在所有问题之后附上一个选项块，用户会在界面上直接点选，不用打字。格式必须严格如下（不要包在代码块里，块内不要用其他标点）：
+<<OPTIONS>>
+问题一的简短问法|选项1|选项2|选项3
+问题二的简短问法|选项1|选项2|选项3|说不清
+<</OPTIONS>>
+   每个问题给 2 至 4 个短选项，每个选项不超过 8 个字，选项要贴合该问题最可能出现的回答，问题数量与上面列出的问题一致。除追问之外，正常解读里绝对不要出现这个块。
 2. 生成解读报告时，使用以下结构（Markdown 二级标题）：
 ## 梦境主线
 （一两句话复述梦的主线，确认没有遗漏关键情节）
@@ -314,20 +321,19 @@ function buildInitialMessages(dream, mode) {
   ];
 }
 
-async function callAI(messages, onDelta) {
-  const resp = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, stream: true }),
-  });
-  if (!resp.ok) {
-    let msg = 'HTTP ' + resp.status;
-    try {
-      const j = await resp.json();
-      msg = j.error?.message || j.error || msg;
-    } catch (e) { /* keep default */ }
-    throw new Error(msg);
-  }
+/* ---------- 模型调用：优先浏览器直连，其次服务器代理 ---------- */
+const DIRECT_API = 'https://api.deepseek.com/chat/completions';
+const KEY_STORE = 'dreamJournal.apiKey';
+
+function loadApiKey() {
+  try { return (localStorage.getItem(KEY_STORE) || '').trim(); } catch (e) { return ''; }
+}
+function saveApiKey(v) {
+  try { localStorage.setItem(KEY_STORE, (v || '').trim()); } catch (e) { /* 忽略 */ }
+}
+
+/* 逐块读取 SSE 流，返回完整文本 */
+async function readStream(resp, onDelta) {
   const reader = resp.body.getReader();
   const dec = new TextDecoder('utf-8');
   let buf = '', full = '';
@@ -352,6 +358,51 @@ async function callAI(messages, onDelta) {
     }
   }
   return full;
+}
+
+function friendlyHttpError(status, detail) {
+  if (status === 401) return '密钥无效或已过期（401），请到「我的」页重新填一次';
+  if (status === 402) return 'DeepSeek 账户余额不足（402）';
+  if (status === 429) return '请求太频繁了，等半分钟再试（429）';
+  if (status >= 500) return '模型服务暂时不稳定（' + status + '），稍后再试';
+  return detail || ('HTTP ' + status);
+}
+
+/* 直连 DeepSeek（不需要服务器） */
+async function callDirect(messages, onDelta, apiKey) {
+  const resp = await fetch(DIRECT_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+    body: JSON.stringify({ model: 'deepseek-chat', messages, stream: true, temperature: 0.9, max_tokens: 2400 }),
+  });
+  if (!resp.ok) {
+    let detail = '';
+    try { const j = await resp.json(); detail = j.error?.message || ''; } catch (e) { /* 忽略 */ }
+    throw new Error(friendlyHttpError(resp.status, detail));
+  }
+  return readStream(resp, onDelta);
+}
+
+/* 走本机/自建服务器代理 */
+async function callProxy(messages, onDelta) {
+  const resp = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, stream: true }),
+  });
+  if (!resp.ok) {
+    let msg = '';
+    try { const j = await resp.json(); msg = j.error?.message || j.error || ''; } catch (e) { /* 忽略 */ }
+    if (resp.status === 404) throw new Error('还没有配置 AI 密钥：请打开「我的」页填入密钥后重试');
+    throw new Error(friendlyHttpError(resp.status, msg) || ('HTTP ' + resp.status));
+  }
+  return readStream(resp, onDelta);
+}
+
+async function callAI(messages, onDelta) {
+  const key = loadApiKey();
+  if (key) return callDirect(messages, onDelta, key);
+  return callProxy(messages, onDelta);
 }
 
 function startInterpretation(dream, mode) {
@@ -400,12 +451,103 @@ function msgActionsHtml(dream, m, idx) {
   if (m.role !== 'assistant' || m.pending || m.error) return '';
   const fb = m.feedback;
   const isLast = idx === dream.messages.length - 1;
+  const copyBtn = isReport(m.content)
+    ? `<button class="fb-btn" data-copy="${idx}">📋 复制这篇解读</button>` : '';
   return `<div class="msg-actions">
+    ${copyBtn}
     <button class="fb-btn ${fb === 'resonant' ? 'on' : ''}" data-fb="resonant" data-idx="${idx}">😊 有共鸣</button>
     <button class="fb-btn ${fb === 'unsure' ? 'on' : ''}" data-fb="unsure" data-idx="${idx}">🤔 不确定</button>
     <button class="fb-btn ${fb === 'notme' ? 'on' : ''}" data-fb="notme" data-idx="${idx}">🙅 不太像我</button>
     ${isLast ? `<button class="fb-btn" data-regen="1">🔁 换个角度重新解读</button>` : ''}
   </div>` + (fb ? `<div class="msg-feedback-note">${fb === 'resonant' ? '已记下：这个方向有共鸣。' : fb === 'unsure' ? '已记下：先保留这个可能性。' : '已记下：下次解读会参考你的否定。'}</div>` : '');
+}
+
+/* ---------- 追问选项块：<<OPTIONS>> 问题|选项|选项 <<OPTIONS>> ---------- */
+const OPT_BLOCK_RE = /<<OPTIONS>>([\s\S]*?)<<\/OPTIONS>>/;
+
+function splitOptions(content) {
+  content = content || '';
+  const m = OPT_BLOCK_RE.exec(content);
+  if (m) {
+    const options = m[1].split('\n').map(l => l.trim()).filter(Boolean).map(line => {
+      const parts = line.split('|').map(s => s.trim()).filter(Boolean);
+      if (parts.length < 2) return null;
+      return { q: parts[0], opts: parts.slice(1) };
+    }).filter(Boolean);
+    return { text: content.replace(OPT_BLOCK_RE, '').trim(), options };
+  }
+  /* 流式输出时块还没写完，先把它藏起来，避免露出半截标签 */
+  const idx = content.indexOf('<<OPTIONS>>');
+  if (idx >= 0) content = content.slice(0, idx);
+  return { text: content.trim(), options: [] };
+}
+
+function optionsHtml(options, idx, text, pending) {
+  if (pending) return '';
+  const groups = options.map(g => `
+    <div class="opt-group">
+      <p class="opt-q">${escapeHtml(g.q)}</p>
+      <div class="opt-chips">${g.opts.map(o =>
+        `<button class="opt-chip" type="button" data-q="${escapeHtml(g.q)}" data-v="${escapeHtml(o)}">${escapeHtml(o)}</button>`
+      ).join('')}</div>
+    </div>`).join('');
+  /* 没有选项块、但看起来是在追问（短消息且带问号）时，也给一个跳过入口 */
+  const guessedAsk = !options.length && text.length < 420 && /[？?]/.test(text);
+  if (!options.length && !guessedAsk) return '';
+  return `<div class="opt-panel">
+    ${groups}
+    <button class="opt-skip" type="button">跳过追问，直接解读 →</button>
+  </div>`;
+}
+
+/* ---------- 复制解读：只取最新那篇报告正文 ---------- */
+function mdToPlain(md) {
+  return md
+    .replace(/<<OPTIONS>>[\s\S]*?<<\/OPTIONS>>/g, '')
+    .replace(/^#{1,6}\s*/gm, '')
+    .replace(/\*\*(.+?)\*\*/g, '$1')
+    .replace(/^\s*[-*]\s+/gm, '· ')
+    .replace(/^\s*\d+\.\s+/gm, (s) => s.replace(/^\s*/, ''))
+    .replace(/`{1,3}/g, '')
+    .replace(/^\s*>\s?/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/* 是否是一篇完整报告（含 Markdown 小标题） */
+function isReport(content) {
+  const t = (content || '');
+  return /^##\s/m.test(t) && /梦境主线|情绪脉络|核心意象/.test(t);
+}
+
+/* 截出报告正文：从第一个 "## " 小标题开始，去掉追问选项块 */
+function reportText(content) {
+  const body = splitOptions(content).text;
+  const at = body.search(/^##\s/m);
+  return mdToPlain(at >= 0 ? body.slice(at) : body);
+}
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch (e) { /* 落到下面的兜底 */ }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.cssText = 'position:fixed;top:0;left:-9999px;opacity:0';
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    const ok = document.execCommand('copy');
+    ta.remove();
+    return ok;
+  } catch (e) {
+    return false;
+  }
 }
 
 function renderChatMessages(dream, keepScroll) {
@@ -416,9 +558,12 @@ function renderChatMessages(dream, keepScroll) {
     if (m.role === 'user') {
       return `<div class="msg user">${escapeHtml(m.content)}</div>`;
     }
+    const parts = splitOptions(m.content);
+    const isLast = i === dream.messages.length - 1;
     const body = m.pending && !m.content
       ? '<p class="typing">正在读你的梦 ……</p>'
-      : renderMarkdown(m.content) + (m.pending ? '<p class="typing">▍</p>' : '');
+      : renderMarkdown(parts.text) + (m.pending ? '<p class="typing">▍</p>' : '') +
+        optionsHtml(parts.options, i, parts.text, m.pending || !isLast);
     return `<div class="msg assistant">${body}${msgActionsHtml(dream, m, i)}</div>`;
   }).join('');
   box.querySelectorAll('[data-fb]').forEach(b => b.addEventListener('click', () => {
@@ -429,6 +574,34 @@ function renderChatMessages(dream, keepScroll) {
     renderChatMessages(dream, true);
   }));
   box.querySelectorAll('[data-regen]').forEach(b => b.addEventListener('click', () => regenerate(dream)));
+  box.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+    const m = dream.messages[Number(b.dataset.copy)];
+    if (!m) return;
+    const ok = await copyText(reportText(m.content));
+    toast(ok ? '已复制，可以直接粘贴' : '复制失败，请长按文字手动复制');
+    if (ok) {
+      const old = b.textContent;
+      b.textContent = '✓ 已复制';
+      setTimeout(() => { b.textContent = old; }, 1600);
+    }
+  }));
+  box.querySelectorAll('.opt-chip').forEach(chip => chip.addEventListener('click', () => {
+    appendAnswer(chip.dataset.q, chip.dataset.v, chip);
+  }));
+  const rp = $('#btn-report');
+  if (rp && !rp._bound) {
+    rp._bound = true;
+    rp.addEventListener('click', () => {
+      if (state.sending) return;
+      $('#chat-input').value = '信息够了，请直接生成完整解读报告，不要再提问。';
+      sendUserMessage();
+    });
+  }
+  box.querySelectorAll('.opt-skip').forEach(b => b.addEventListener('click', () => {
+    if (state.sending) return;
+    $('#chat-input').value = '跳过追问，直接解读吧';
+    sendUserMessage();
+  }));
   if (keepScroll ? nearBottom : true) box.scrollTop = box.scrollHeight;
   if (!keepScroll) window.scrollTo({ top: 0 });
 }
@@ -478,6 +651,18 @@ $('#btn-send').addEventListener('click', sendUserMessage);
 $('#chat-input').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendUserMessage(); }
 });
+function appendAnswer(q, v, chip) {
+  if (state.sending) return;
+  const inp = $('#chat-input');
+  const prefix = q + '：';
+  const cur = (inp.value || '').trim();
+  const lines = cur ? cur.split('\n').filter(l => l.trim() && !l.startsWith(prefix)) : [];
+  lines.push(prefix + v);
+  inp.value = lines.join('\n');
+  inp.focus();
+  chip.classList.add('picked');
+}
+
 function sendUserMessage() {
   const dream = getActiveDream();
   if (!dream || state.sending) return;
@@ -529,8 +714,19 @@ function openDreamDetail(id) {
   $('#detail-assoc').textContent = extra.join('\n');
   const msgs = (d.messages || []).filter(m => m.role === 'assistant' && !m.pending);
   $('#detail-messages').innerHTML = msgs.length
-    ? msgs.map((m, i) => `<div class="dm"><div class="dm-role">解读 ${i + 1}${m.feedback ? ' · ' + ({ resonant: '有共鸣', unsure: '不确定', notme: '不太像我' }[m.feedback] || '') : ''}</div>${renderMarkdown(m.content)}</div>`).join('')
+    ? msgs.map((m, i) => {
+        const parts = splitOptions(m.content);
+        const copy = isReport(m.content) ? `<button class="dm-copy" type="button" data-dmi="${i}">复制</button>` : '';
+        return `<div class="dm"><div class="dm-role">解读 ${i + 1}${m.feedback ? ' · ' + ({ resonant: '有共鸣', unsure: '不确定', notme: '不太像我' }[m.feedback] || '') : ''}${copy}</div>${renderMarkdown(parts.text)}</div>`;
+      }).join('')
     : '<p class="empty-sub">还没有解读记录。</p>';
+  $('#detail-messages').querySelectorAll('[data-dmi]').forEach(btn => btn.addEventListener('click', async () => {
+    const m = msgs[Number(btn.dataset.dmi)];
+    if (!m) return;
+    const ok = await copyText(reportText(m.content));
+    toast(ok ? '已复制，可以直接粘贴' : '复制失败，请长按文字手动复制');
+    if (ok) { const old = btn.textContent; btn.textContent = '✓ 已复制'; setTimeout(() => { btn.textContent = old; }, 1600); }
+  }));
   if (state.view !== 'archive') showView('archive');
   $('#dream-detail').scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
@@ -704,25 +900,61 @@ $('#btn-clear').addEventListener('click', async () => {
   saveData(); showView('home');
   toast('已清空');
 });
+/* ---------- 密钥设置 ---------- */
+function refreshKeyState() {
+  const el = $('#key-state');
+  if (!el) return;
+  const has = loadApiKey();
+  el.className = 'ping-result' + (has ? ' ok' : '');
+  el.textContent = has ? '已保存 ✓' : '还没填密钥';
+}
+$('#btn-save-key').addEventListener('click', () => {
+  const v = ($('#key-input').value || '').trim();
+  if (!v) { toast('先把密钥粘贴进来'); return; }
+  saveApiKey(v);
+  $('#key-input').value = '';
+  refreshKeyState();
+  toast('密钥已保存在这台设备');
+});
+$('#btn-clear-key').addEventListener('click', () => {
+  saveApiKey('');
+  refreshKeyState();
+  toast('已清除密钥');
+});
+
 $('#btn-ping').addEventListener('click', async () => {
   const el = $('#ping-result');
   el.className = 'ping-result'; el.textContent = '检查中…';
   try {
-    const resp = await fetch('/api/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: [{ role: 'user', content: '只回复：ok' }], stream: false, max_tokens: 10 }),
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const j = await resp.json();
-    if (!j.choices || !j.choices[0]) throw new Error('返回异常');
-    el.classList.add('ok'); el.textContent = '连接正常，可以解读 ✓';
+    const key = loadApiKey();
+    if (key) {
+      const resp = await fetch(DIRECT_API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + key },
+        body: JSON.stringify({ model: 'deepseek-chat', messages: [{ role: 'user', content: '只回复：ok' }], max_tokens: 10, stream: false }),
+      });
+      if (!resp.ok) throw new Error(friendlyHttpError(resp.status, ''));
+      const j = await resp.json();
+      if (!j.choices || !j.choices[0]) throw new Error('返回异常');
+      el.classList.add('ok'); el.textContent = '连接正常，可以解读 ✓（直连）';
+    } else {
+      const resp = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: '只回复：ok' }], stream: false, max_tokens: 10 }),
+      });
+      if (!resp.ok) throw new Error(resp.status === 404 ? '还没填密钥，也没有服务器' : friendlyHttpError(resp.status, ''));
+      const j = await resp.json();
+      if (!j.choices || !j.choices[0]) throw new Error('返回异常');
+      el.classList.add('ok'); el.textContent = '连接正常 ✓（服务器代理）';
+    }
   } catch (err) {
     el.classList.add('bad');
-    el.textContent = '连接失败：' + err.message + '（本地打开请先启动服务器，见 README）';
+    el.textContent = '连接失败：' + err.message;
   }
 });
 
 /* ---------- 启动 ---------- */
+refreshKeyState();
 renderChips();
 showView('home');
