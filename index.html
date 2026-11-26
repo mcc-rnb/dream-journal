@@ -6,10 +6,15 @@
 <meta name="theme-color" content="#0d1126">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="梦境手记">
+<meta name="application-name" content="梦境手记">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="description" content="梦境手记：记录梦境，与 AI 一起温和地探索梦的含义。">
 <title>梦境手记 · 你的解梦助手</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🌙</text></svg>">
-<link rel="stylesheet" href="styles.css?v=20261126g">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css?v=20261126h">
 </head>
 <body>
 <div id="app">
@@ -23,6 +28,8 @@
       </div>
     </div>
   </header>
+
+  <div id="offline-banner" class="offline-banner" hidden>当前离线：可以查看和记录梦，AI 解读需要联网。</div>
 
   <main id="main">
 
@@ -188,6 +195,19 @@
         </div>
       </div>
 
+      <div class="card" id="install-card">
+        <h2 class="card-title">安装到手机桌面</h2>
+        <p class="empty-sub" id="install-status">像 App 一样全屏打开；离线也能查看档案，生成 AI 解读时需要联网。</p>
+        <div class="btn-row btn-column">
+          <button id="btn-install" class="btn btn-primary" type="button" hidden>安装「梦境手记」</button>
+        </div>
+        <ul class="note-list install-guide">
+          <li><strong>iPhone：</strong>用 Safari 打开，点「分享」→「添加到主屏幕」。</li>
+          <li><strong>安卓：</strong>用 Chrome 打开，点浏览器菜单 →「安装应用」或「添加到主屏幕」。</li>
+          <li>安装前建议先导出一次备份，之后固定从桌面图标打开；如提示未配置密钥，在下方再保存一次即可。</li>
+        </ul>
+      </div>
+
       <div class="card">
         <h2 class="card-title">AI 密钥</h2>
         <p class="empty-sub">这个网页自己直连 DeepSeek，不需要服务器。密钥只保存在这台设备的浏览器里，不会上传，也不包含在导出的备份文件里。</p>
@@ -243,6 +263,6 @@
   </div>
 </div>
 
-<script src="app.js?v=20261126g"></script>
+<script src="app.js?v=20261126h"></script>
 </body>
 </html>
