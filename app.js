@@ -94,7 +94,7 @@ function perspectiveOf(m) { return (m && PERSPECTIVES[m.perspective]) ? m.perspe
 
 /* 民俗语料独立存放，只有用户主动选择「古人怎么说」时才检索并注入。 */
 let FOLK_CORPUS = [];
-const folkCorpusReady = fetch('folk-corpus.json?v=20261126g')
+const folkCorpusReady = fetch('folk-corpus.json?v=20261126h')
   .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(d => { FOLK_CORPUS = Array.isArray(d.entries) ? d.entries : []; })
   .catch(() => { FOLK_CORPUS = []; });
@@ -579,7 +579,8 @@ async function runAssistant(dream, options = {}) {
     });
     placeholder.content = full || '（没有收到回复，请再试一次）';
   } catch (err) {
-    placeholder.content = `这次解读没有成功：${err.message}\n\n可以稍后再试，或在「我的 → 连接状态」里检查 AI 连接。`;
+    const reason = !navigator.onLine ? '当前离线。旧档案仍可查看，生成解读需要联网。' : err.message;
+    placeholder.content = `这次解读没有成功：${reason}\n\n可以稍后再试，或在「我的 → 连接状态」里检查 AI 连接。`;
     placeholder.error = true;
   }
   delete placeholder.pending;
@@ -1188,6 +1189,62 @@ $('#btn-ping').addEventListener('click', async () => {
     el.textContent = '连接失败：' + err.message;
   }
 });
+
+/* ---------- PWA 安装与离线状态 ---------- */
+let deferredInstallPrompt = null;
+function isStandaloneMode() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function refreshInstallState() {
+  const btn = $('#btn-install'), status = $('#install-status');
+  if (!btn || !status) return;
+  if (isStandaloneMode()) {
+    btn.hidden = true;
+    status.textContent = '已以桌面应用模式打开 ✓ 旧档案可离线查看，AI 解读需要联网。';
+  } else {
+    btn.hidden = !deferredInstallPrompt;
+  }
+}
+window.addEventListener('beforeinstallprompt', event => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  refreshInstallState();
+});
+$('#btn-install').addEventListener('click', async () => {
+  if (!deferredInstallPrompt) return;
+  const promptEvent = deferredInstallPrompt;
+  deferredInstallPrompt = null;
+  refreshInstallState();
+  try {
+    await promptEvent.prompt();
+    const choice = await promptEvent.userChoice;
+    if (choice.outcome !== 'accepted') toast('已取消安装，也可以稍后再来');
+  } catch (e) { toast('请用浏览器菜单里的「安装应用／添加到主屏幕」'); }
+});
+window.addEventListener('appinstalled', () => {
+  deferredInstallPrompt = null;
+  refreshInstallState();
+  toast('已安装到桌面，下次点图标就能打开');
+});
+const standaloneMedia = window.matchMedia('(display-mode: standalone)');
+if (standaloneMedia.addEventListener) standaloneMedia.addEventListener('change', refreshInstallState);
+else if (standaloneMedia.addListener) standaloneMedia.addListener(refreshInstallState);
+
+function updateOnlineState() {
+  const banner = $('#offline-banner');
+  if (banner) banner.hidden = navigator.onLine;
+}
+window.addEventListener('online', () => { updateOnlineState(); toast('网络已恢复，可以继续解读'); });
+window.addEventListener('offline', updateOnlineState);
+updateOnlineState();
+refreshInstallState();
+
+if ('serviceWorker' in navigator &&
+    (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* 安装失败不影响网页版使用 */ });
+  });
+}
 
 /* ---------- 启动 ---------- */
 /* 支持从链接参数自动填密钥：打开 …/#k=sk-xxx 即可，不经过服务器 */
