@@ -14,7 +14,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="styles.css?v=20261126h">
+<link rel="stylesheet" href="styles.css?v=20261126i">
 </head>
 <body>
 <div id="app">
@@ -29,7 +29,7 @@
     </div>
   </header>
 
-  <div id="offline-banner" class="offline-banner" hidden>当前离线：可以查看和记录梦，AI 解读需要联网。</div>
+  <div id="offline-banner" class="offline-banner" hidden>当前离线：仍可记录、主动保存和查看已有档案，AI 解读需要联网。</div>
 
   <main id="main">
 
@@ -84,17 +84,10 @@
         </details>
 
         <div class="btn-row">
-          <button id="btn-save" class="btn btn-ghost" type="button">仅保存</button>
-          <button id="btn-save-chat" class="btn btn-primary" type="button">保存并开始解读</button>
+          <button id="btn-save" class="btn btn-ghost" type="button">保存到档案</button>
+          <button id="btn-save-chat" class="btn btn-primary" type="button">开始解读</button>
         </div>
-      </div>
-
-      <div class="card recent-card">
-        <div class="card-title-row">
-          <h2 class="card-title">最近的梦</h2>
-          <button class="link-btn" data-go="archive">全部档案 →</button>
-        </div>
-        <div id="recent-list" class="dream-list"></div>
+        <p class="save-choice-hint">默认不保存：直接解读的梦只在本次打开期间保留。想以后再看，再主动保存到档案。</p>
       </div>
     </section>
 
@@ -103,13 +96,21 @@
       <div id="chat-empty" class="card empty-card">
         <p class="empty-icon">💭</p>
         <p>还没有正在解读的梦。</p>
-        <p class="empty-sub">先去记一个梦，或从档案里选择一个。</p>
+        <p class="empty-sub">先去记一个梦，或从「我的 → 梦境档案」里选择一个。</p>
+        <button class="btn btn-primary empty-new-dream" data-go="home" type="button">记录新梦</button>
         <div id="chat-pick" class="dream-list"></div>
       </div>
 
       <div id="chat-main" hidden>
         <div class="card dream-context" id="dream-context"></div>
         <div id="chat-messages" class="chat-messages"></div>
+        <div id="chat-record-actions" class="record-actions" hidden>
+          <p id="record-save-state" class="record-save-state"></p>
+          <div class="record-action-buttons">
+            <button id="btn-archive-active" class="fb-btn" type="button">＋ 保存到档案</button>
+            <button id="btn-delete-active" class="fb-btn record-delete" type="button">解读完了，删除</button>
+          </div>
+        </div>
         <div class="chat-quick">
           <button id="btn-report" type="button">够了，直接出完整报告 →</button>
         </div>
@@ -185,13 +186,22 @@
     <!-- ============ 我的 ============ -->
     <section id="view-me" class="view">
       <div class="card">
-        <h2 class="card-title">数据管理</h2>
-        <p class="empty-sub">所有梦境只保存在这台设备的浏览器里，不会上传到任何服务器。记得定期导出备份。</p>
+        <h2 class="card-title">梦境档案</h2>
+        <p class="empty-sub">这里只放你主动保存的梦。直接开始解读不会自动留下记录。</p>
+        <div class="btn-row">
+          <button class="btn btn-ghost" data-go="archive" type="button">查看已保存的梦</button>
+          <button class="btn btn-ghost" data-go="insights" type="button">回顾与统计</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">备份与清除</h2>
+        <p class="empty-sub">仅管理你主动保存的档案；它们只存在这台设备的浏览器里，不会上传到服务器。</p>
         <div class="btn-row btn-column">
-          <button id="btn-export" class="btn btn-ghost" type="button">导出备份（JSON）</button>
+          <button id="btn-export" class="btn btn-ghost" type="button">导出档案备份（JSON）</button>
           <button id="btn-import" class="btn btn-ghost" type="button">导入备份</button>
           <input id="import-file" type="file" accept="application/json,.json" hidden>
-          <button id="btn-clear" class="btn btn-danger" type="button">清空全部数据</button>
+          <button id="btn-clear" class="btn btn-danger" type="button">清空已保存的档案</button>
         </div>
       </div>
 
@@ -231,7 +241,8 @@
       <div class="card">
         <h2 class="card-title">隐私与说明</h2>
         <ul class="note-list">
-          <li>梦境记录保存在你的浏览器本地；清除浏览器数据会一并清除，请先导出备份。</li>
+          <li>新梦默认只保留在当前页面，刷新或关闭后就不保留；只有你主动点「保存到档案」的梦才会写入浏览器本地。</li>
+          <li>已保存的档案可以由你随时删除；清除浏览器数据也会清除它们，需要长期保留时请先导出备份。</li>
           <li>只有当你主动发起解读时，当前这一个梦的内容才会被发送给 AI 服务用于生成回复。</li>
           <li>解梦是一种自我探索和娱乐方式：AI 会给出几种可能的理解，但没有任何解释是确定的答案，更不能预测未来。</li>
           <li>如果长期反复噩梦、严重失眠或因此明显影响生活，建议寻求专业的睡眠或心理支持。</li>
@@ -245,8 +256,6 @@
   <nav class="tabbar">
     <button class="tab active" data-view="home"><span>📝</span>记梦</button>
     <button class="tab" data-view="chat"><span>💬</span>解读</button>
-    <button class="tab" data-view="archive"><span>🗂️</span>档案</button>
-    <button class="tab" data-view="insights"><span>✨</span>回顾</button>
     <button class="tab" data-view="me"><span>⚙️</span>我的</button>
   </nav>
 </div>
@@ -263,6 +272,6 @@
   </div>
 </div>
 
-<script src="app.js?v=20261126h"></script>
+<script src="app.js?v=20261126i"></script>
 </body>
 </html>
