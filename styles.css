@@ -268,6 +268,16 @@ textarea{resize:vertical;min-height:44px}
 /* 修复：显式声明的 display 会覆盖 [hidden]，导致弹窗常驻 */
 [hidden]{display:none !important}
 
+/* 默认不保存：解读后的主动保存与删除 */
+.save-choice-hint{margin-top:10px;color:var(--text-dim);font-size:12px;line-height:1.65}
+.empty-new-dream{display:block;margin:16px auto 20px}
+.record-actions{margin:2px 0 14px;padding:12px 14px;border:1px dashed var(--line);border-radius:14px;background:rgba(26,32,64,.5)}
+.record-save-state{font-size:12px;color:var(--text-dim);margin-bottom:9px;text-align:center}
+.record-action-buttons{display:flex;gap:8px}
+.record-action-buttons .fb-btn{flex:1;padding:8px 10px;color:var(--text);font-size:12.5px}
+.record-action-buttons .record-delete{color:var(--danger);border-color:rgba(242,125,152,.45)}
+.record-action-buttons button:disabled{opacity:.45;cursor:wait}
+
 /* ===== 追问选项：可直接点选 ===== */
 .opt-panel{margin-top:14px;padding:14px;border:1px solid var(--line);border-radius:14px;
   background:rgba(34,42,82,.55)}
