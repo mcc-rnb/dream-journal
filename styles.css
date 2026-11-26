@@ -151,6 +151,24 @@ textarea{resize:vertical;min-height:44px}
   border:1px solid var(--line);color:var(--text-dim);cursor:pointer}
 .fb-btn.on{border-color:var(--accent);color:var(--accent)}
 .msg-feedback-note{font-size:12px;color:var(--ok);margin-top:8px}
+.perspective-badge{display:inline-flex;align-items:center;gap:4px;margin-bottom:9px;padding:3px 9px;
+  border:1px solid rgba(167,139,250,.35);border-radius:999px;color:var(--accent);
+  background:rgba(167,139,250,.08);font-size:11.5px;font-weight:600;letter-spacing:.02em}
+.perspective-badge.folk{color:var(--warm);border-color:rgba(245,217,168,.35);background:rgba(245,217,168,.07)}
+.perspective-badge.science{color:#9bd8f5;border-color:rgba(155,216,245,.32);background:rgba(155,216,245,.07)}
+.msg.assistant.folk{border-color:rgba(245,217,168,.25)}
+.msg.assistant.science{border-color:rgba(155,216,245,.22)}
+.perspective-switch{margin-top:15px;padding:11px 0 0;border-top:1px solid rgba(169,163,199,.18)}
+.perspective-switch>span{display:block;margin-bottom:8px;font-size:11.5px;color:var(--text-dim)}
+.perspective-options{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.perspective-btn{min-width:0;padding:7px 5px;border:1px solid var(--line);border-radius:10px;
+  background:var(--bg);color:var(--text-dim);font-size:11.5px;white-space:nowrap;cursor:pointer}
+.perspective-btn:not(.active):active{background:var(--card2)}
+.perspective-btn.active{border-color:var(--accent);color:var(--text);background:rgba(167,139,250,.14);cursor:default;opacity:1}
+.perspective-btn.active:disabled{color:var(--text)}
+.report-sources{margin-top:12px;font-size:11px;line-height:1.7;color:var(--text-dim)}
+.report-sources a{color:var(--text-dim);text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.detail-messages .report-sources{font-size:10.5px}
 .chat-input-bar{
   display:flex;gap:10px;align-items:flex-end;
   position:sticky;bottom:calc(70px + env(safe-area-inset-bottom));
