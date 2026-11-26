@@ -217,6 +217,13 @@ textarea{resize:vertical;min-height:44px}
 /* 我的 */
 .note-list{padding-left:20px;font-size:13.5px;color:var(--text-dim)}
 .note-list li{margin:7px 0}
+.install-guide{margin-top:12px;font-size:12.5px;line-height:1.75}
+.install-guide strong{color:var(--warm);font-weight:600}
+.offline-banner{margin:4px 0 10px;padding:9px 12px;border:1px solid rgba(245,217,168,.35);
+  border-radius:12px;background:rgba(245,217,168,.08);color:var(--warm);font-size:12.5px;text-align:center}
+@media (display-mode: standalone){
+  .app-header{padding-top:calc(22px + env(safe-area-inset-top))}
+}
 .version{text-align:center;font-size:12px;color:var(--text-dim);margin-top:16px;opacity:.7}
 .ping-result{font-size:13.5px;color:var(--text-dim);align-self:center}
 .ping-result.ok{color:var(--ok)}
