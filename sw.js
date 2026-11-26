@@ -1,11 +1,11 @@
 /* 梦境手记：只缓存界面与公开语料，不处理 DeepSeek 请求，不读取 localStorage。 */
-const CACHE = 'dream-journal-v20261126h';
+const CACHE = 'dream-journal-v20261126i';
 const CORE = [
   './',
   './index.html',
-  './styles.css?v=20261126h',
-  './app.js?v=20261126h',
-  './folk-corpus.json?v=20261126h',
+  './styles.css?v=20261126i',
+  './app.js?v=20261126i',
+  './folk-corpus.json?v=20261126i',
   './manifest.webmanifest',
   './icons/icon-192.png',
   './icons/icon-512.png',
