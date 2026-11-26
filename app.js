@@ -955,6 +955,19 @@ $('#btn-ping').addEventListener('click', async () => {
 });
 
 /* ---------- 启动 ---------- */
+/* 支持从链接参数自动填密钥：打开 …/#k=sk-xxx 即可，不经过服务器 */
+(function applyKeyFromLink() {
+  try {
+    const raw = (location.hash || '').replace(/^#/, '');
+    if (!raw) return;
+    const params = new URLSearchParams(raw);
+    const k = (params.get('k') || params.get('key') || '').trim();
+    if (!k) return;
+    saveApiKey(k);
+    history.replaceState(null, '', location.pathname + location.search);
+    setTimeout(() => toast('密钥已自动填好，可以直接记梦了'), 500);
+  } catch (e) { /* 忽略 */ }
+})();
 refreshKeyState();
 renderChips();
 showView('home');
