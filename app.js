@@ -552,7 +552,7 @@ async function copyText(text) {
 
 function renderChatMessages(dream, keepScroll) {
   const box = $('#chat-messages');
-  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 120;
+  const winY = window.scrollY || window.pageYOffset || 0;
   box.innerHTML = dream.messages.map((m, i) => {
     if (m.role === 'system') return '';
     if (m.role === 'user') {
@@ -602,8 +602,14 @@ function renderChatMessages(dream, keepScroll) {
     $('#chat-input').value = '跳过追问，直接解读吧';
     sendUserMessage();
   }));
-  if (keepScroll ? nearBottom : true) box.scrollTop = box.scrollHeight;
-  if (!keepScroll) window.scrollTo({ top: 0 });
+  if (keepScroll) {
+    /* 点按钮这类局部刷新：页面停在原处，不往回跳 */
+    window.scrollTo({ top: winY, behavior: 'auto' });
+  } else {
+    /* 发了新消息/开始解读：滚到最新一条，而不是页顶 */
+    const last = box.lastElementChild;
+    if (last && last.scrollIntoView) last.scrollIntoView({ block: 'end', behavior: 'auto' });
+  }
 }
 
 function regenerate(dream) {
@@ -659,7 +665,7 @@ function appendAnswer(q, v, chip) {
   const lines = cur ? cur.split('\n').filter(l => l.trim() && !l.startsWith(prefix)) : [];
   lines.push(prefix + v);
   inp.value = lines.join('\n');
-  inp.focus();
+  try { inp.focus({ preventScroll: true }); } catch (e) { inp.focus(); }
   chip.classList.add('picked');
 }
 
