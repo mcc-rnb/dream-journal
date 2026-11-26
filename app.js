@@ -57,16 +57,14 @@ const FOLK_PROMPT = `你是「梦境手记」的古代梦学文化向导。用�
 3. 凶兆条文必须作为古代说法转述，并立即说明它不能预测现实；若语料中有互相矛盾的判词，应指出矛盾，而不是挑选一个当答案。
 4. 不把心理学、现代医学和占梦混为一谈，不用古代条文诊断疾病。
 
-首次生成时采用以下简洁结构，总量约300至500字：
-开头1至2句：说明这个梦在古代分类里可能接近哪一类，不评价吉凶。
-**古人怎么理解**
-列2至3条最相关的语料。每条包含《书名》、简短原文和一句白话说明，并自然联系用户的梦；不要只罗列资料。
-**这些说法为什么不一样**
-用1个短段落说明反说、谐音、解字、因人而异等占梦方法，或不同版本的矛盾；语料支持哪一种就写哪一种，不强行面面俱到。
-**可以怎样带走**
-用2至3句温和收尾：把它当作了解古人如何面对梦的材料；可以借鉴自我反省，但不据此预测或决定现实。
+首次生成总量约250至420字。不要固定标题，不要写成“古人怎么理解／这些说法为什么不一样／可以怎样带走”那种文献摘要，也不要逐条罗列资料。像一篇知乎高赞回答：有依据，但全程说人话。
+- 开头直接用一两句给出最有意思、最破除常识的判断，别客套，别先复述整个梦。
+- 中间用2至4个短段落围绕一条主线往下说。古文最多引2处，每处尽量只摘4至12个字，并在同一句话或下一句话立刻翻成白话，例如“有忧即梦其事”——说白了就是，心里一直放不下的事，夜里容易接着演。
+- 历史故事直接用一两句白话讲清楚，不照搬大段原文；书名自然带出即可。必须让用户只看白话也能完全读懂。
+- 结尾用一两句自然收束，可以落在“古人自己也没把梦当标准答案”或“能拿来照镜子，不能拿来算未来”，但不要喊口号，不要固定写免责声明。
+- 少说“语料、条文、分类、文献、用户”等生硬词，不要反复出现“古人或许”“这只是一个分类”。可以偶尔用“有意思的是”“说白了”“先别急着……”，但不要油滑、不要标题党。
 
-已经生成过民俗解读后，用户追问或补充时，默认只用80至250字回应，不重复整篇结构；只有明确要求重新生成时才重新采用上述结构。全程中文，语气平和、有文化感但不故弄玄虚。`;
+已经生成过民俗解读后，用户追问或补充时，默认只用80至220字自然回应，像接着聊天，不重复整篇结构；只有明确要求重新生成时才重新写一篇。全程中文，有文化感但不故弄玄虚。`;
 
 const SCIENCE_PROMPT = `你是「梦境手记」的睡眠科学向导。用户已经结束了梦境信息追问，现在主动选择「科学解释」视角。你的任务是给出克制、易懂的普通解释，不把梦当成密码，也不重复心理象征分析。
 
@@ -96,7 +94,7 @@ function perspectiveOf(m) { return (m && PERSPECTIVES[m.perspective]) ? m.perspe
 
 /* 民俗语料独立存放，只有用户主动选择「古人怎么说」时才检索并注入。 */
 let FOLK_CORPUS = [];
-const folkCorpusReady = fetch('folk-corpus.json?v=20261126f')
+const folkCorpusReady = fetch('folk-corpus.json?v=20261126g')
   .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(d => { FOLK_CORPUS = Array.isArray(d.entries) ? d.entries : []; })
   .catch(() => { FOLK_CORPUS = []; });
@@ -562,6 +560,7 @@ async function runAssistant(dream, options = {}) {
   state.sending = true;
   updateSendBtn();
   const placeholder = { role: 'assistant', content: '', ts: Date.now(), pending: true, perspective, sources };
+  if (options.report || options.independent) placeholder.report = true;
   dream.messages.push(placeholder);
   renderChatMessages(dream);
   try {
@@ -598,7 +597,7 @@ function updateSendBtn() {
 
 function perspectiveBadgeHtml(m) {
   const p = perspectiveOf(m);
-  if (p === 'psychology' && !isReport(m.content)) return '';
+  if (p === 'psychology' && !isReportMessage(m)) return '';
   const meta = PERSPECTIVES[p];
   return `<div class="perspective-badge ${p}">${meta.icon} ${meta.label}</div>`;
 }
@@ -611,7 +610,7 @@ function sourcesHtml(m) {
 }
 
 function perspectiveSwitchHtml(m, idx) {
-  if (!isReport(m.content) || m.pending || m.error) return '';
+  if (!isReportMessage(m) || m.pending || m.error) return '';
   const current = perspectiveOf(m);
   return `<div class="perspective-switch"><span>换个视角</span><div class="perspective-options">${Object.entries(PERSPECTIVES).map(([key, meta]) => {
     const active = key === current;
@@ -623,7 +622,7 @@ function msgActionsHtml(dream, m, idx) {
   if (m.role !== 'assistant' || m.pending || m.error) return '';
   const fb = m.feedback;
   const isLast = idx === dream.messages.length - 1;
-  const copyBtn = isReport(m.content)
+  const copyBtn = isReportMessage(m)
     ? `<button class="fb-btn" data-copy="${idx}">📋 复制这篇解读</button>` : '';
   return sourcesHtml(m) + perspectiveSwitchHtml(m, idx) + `<div class="msg-actions">
     ${copyBtn}
@@ -714,6 +713,10 @@ function isReport(content) {
   return DETAIL_HEADING_RE.test(t) ||
     (/^##\s/m.test(t) && /梦境主线|情绪脉络|核心意象/.test(t)) ||
     /\*\*(?:古人怎么理解|这些说法为什么不一样|这个梦可能怎样形成|哪些细节不必过度解释)\*\*/.test(t);
+}
+
+function isReportMessage(m) {
+  return !!m && (m.report === true || isReport(m.content));
 }
 
 /* 新版只复制第一屏的简洁解读；旧版仍从第一个小标题开始复制 */
@@ -845,7 +848,7 @@ function regenerate(dream) {
   });
   saveData();
   renderChatMessages(dream);
-  runAssistant(dream, { perspective });
+  runAssistant(dream, { perspective, report: true });
 }
 
 function renderChat() {
@@ -948,7 +951,7 @@ function openDreamDetail(id) {
     ? msgs.map((m, i) => {
         const parts = splitOptions(m.content);
         const meta = PERSPECTIVES[perspectiveOf(m)];
-        const copy = isReport(m.content) ? `<button class="dm-copy" type="button" data-dmi="${i}">复制</button>` : '';
+        const copy = isReportMessage(m) ? `<button class="dm-copy" type="button" data-dmi="${i}">复制</button>` : '';
         return `<div class="dm"><div class="dm-role"><span>${meta.icon} ${meta.label} · 解读 ${i + 1}${m.feedback ? ' · ' + ({ resonant: '有共鸣', unsure: '不确定', notme: '不太像我' }[m.feedback] || '') : ''}</span>${copy}</div>${interpretationHtml(parts.text)}${sourcesHtml(m)}</div>`;
       }).join('')
     : '<p class="empty-sub">还没有解读记录。</p>';
