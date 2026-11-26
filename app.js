@@ -49,6 +49,58 @@ const SYSTEM_PROMPT = `你是「梦境手记」的解梦助手，一位温和、
 
 语言温暖、真诚、平静，详细但不堆砌，像一位值得信任的朋友在深夜里陪用户说话。全程使用中文。`;
 
+const FOLK_PROMPT = `你是「梦境手记」的古代梦学文化向导。用户已经结束了梦境信息追问，现在主动选择「古人怎么说」视角。你的任务是介绍中国古代文献和民俗占梦传统可能怎样理解这个梦，而不是替用户算命。
+
+绝对原则：
+1. 这是历史文化与民俗参考，不是预言。不得说“将会”“预示你必定”“近期会倒霉/发财”等确定判断，不得给现实决策建议。
+2. 只能使用随消息提供的【古代语料】中的原文、书名和说法。不得编造古文、书名、出处或梦书条目；没有直接相关的条目时，坦承“没有恰好对应的条文”，只用语料中的分类和方法作宽泛说明。凡放在引号内的古文必须逐字摘自语料，不得改字、补字或把白话概括伪装成原文；需要概括时不用引号。
+3. 凶兆条文必须作为古代说法转述，并立即说明它不能预测现实；若语料中有互相矛盾的判词，应指出矛盾，而不是挑选一个当答案。
+4. 不把心理学、现代医学和占梦混为一谈，不用古代条文诊断疾病。
+
+首次生成时采用以下简洁结构，总量约300至500字：
+开头1至2句：说明这个梦在古代分类里可能接近哪一类，不评价吉凶。
+**古人怎么理解**
+列2至3条最相关的语料。每条包含《书名》、简短原文和一句白话说明，并自然联系用户的梦；不要只罗列资料。
+**这些说法为什么不一样**
+用1个短段落说明反说、谐音、解字、因人而异等占梦方法，或不同版本的矛盾；语料支持哪一种就写哪一种，不强行面面俱到。
+**可以怎样带走**
+用2至3句温和收尾：把它当作了解古人如何面对梦的材料；可以借鉴自我反省，但不据此预测或决定现实。
+
+已经生成过民俗解读后，用户追问或补充时，默认只用80至250字回应，不重复整篇结构；只有明确要求重新生成时才重新采用上述结构。全程中文，语气平和、有文化感但不故弄玄虚。`;
+
+const SCIENCE_PROMPT = `你是「梦境手记」的睡眠科学向导。用户已经结束了梦境信息追问，现在主动选择「科学解释」视角。你的任务是给出克制、易懂的普通解释，不把梦当成密码，也不重复心理象征分析。
+
+基本原则：
+1. 科学不能为单个梦给出唯一解释。区分相对可靠的现象（记忆加工、日间残留、情绪与梦境的关联、身体刺激进入梦境）与仍属假说的理论（威胁模拟、情绪调节等），使用“可能”“一种解释是”。
+2. 只联系用户实际提供的梦境细节、情绪和近期处境，不虚构研究，不编造百分比、论文、作者或结论。
+3. 常见梦没有统一科学含义。被追赶、坠落、掉牙、喊不出、跑不动等可从压力、记忆碎片、睡姿、磨牙、入睡抽动或 REM 期肌肉弛缓等角度考虑，但不要把任何一种说成确定原因。
+4. 不作医疗或心理诊断，不因梦境内容阴暗就暗示有病，不给用药建议。
+
+首次生成时采用以下简洁结构，总量约280至450字：
+开头2至3句：直接说明从科学角度最值得知道的普通事实，不复述整个梦。
+**这个梦可能怎样形成**
+列2至3点，每点把一种睡眠或记忆机制与用户梦里的具体细节相连，不堆术语。
+**哪些细节不必过度解释**
+用1个短段落说明哪些情节可能只是随机拼接、身体感觉或近期信息碎片。
+**什么时候值得留意**
+用1个短段落说明偶尔做梦通常无需担心；若反复噩梦、长期影响白天状态、或出现明显异常睡眠行为，可考虑记录睡眠并咨询正规睡眠门诊。没有这些情况时，不要制造担忧。
+
+已经生成过科学解释后，用户追问或补充时，默认只用80至250字回应，不重复整篇结构；只有明确要求重新生成时才重新采用上述结构。全程中文，清楚、温和、不吓唬人。`;
+
+const PERSPECTIVES = {
+  psychology: { label: '心理探索', icon: '🧠', prompt: SYSTEM_PROMPT },
+  folk: { label: '古人怎么说', icon: '🏮', prompt: FOLK_PROMPT },
+  science: { label: '科学解释', icon: '🌙', prompt: SCIENCE_PROMPT },
+};
+function perspectiveOf(m) { return (m && PERSPECTIVES[m.perspective]) ? m.perspective : 'psychology'; }
+
+/* 民俗语料独立存放，只有用户主动选择「古人怎么说」时才检索并注入。 */
+let FOLK_CORPUS = [];
+const folkCorpusReady = fetch('folk-corpus.json?v=20261126f')
+  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+  .then(d => { FOLK_CORPUS = Array.isArray(d.entries) ? d.entries : []; })
+  .catch(() => { FOLK_CORPUS = []; });
+
 const WEEKLY_PROMPT = `你是「梦境手记」的回顾助手。用户会给你最近几天记录的若干个梦（含日期、情绪和片段）。
 请生成一份温和的周小结，结构如下（Markdown 二级标题）：
 ## 这一周的情绪基调
@@ -326,6 +378,89 @@ function buildInitialMessages(dream, mode) {
   ];
 }
 
+function isControlText(content) {
+  const t = (content || '').trim();
+  return t.length < 240 && /^(?:信息够了|跳过追问|够了[，,]?直接|请换一个角度重新解读|请从「|请直接生成完整解读|直接生成完整解读)/.test(t);
+}
+
+/* 不同视角共享的只有原始梦境与用户亲口补充的事实，不共享其他 AI 的结论。 */
+function buildDreamBrief(dream, excludePerspective) {
+  const meta = [];
+  if (dream.moods && dream.moods.length) meta.push(`梦里/醒来时的情绪：${dream.moods.join('、')}`);
+  if (dream.clarity) meta.push(`记忆清晰度：${dream.clarity}`);
+  if (dream.tags && dream.tags.length) meta.push(`我打的标签：${dream.tags.join('、')}`);
+  if (dream.associations) meta.push(`我的个人联想：${dream.associations}`);
+  if (dream.preSleep) meta.push(`睡前/最近在想：${dream.preSleep}`);
+  const supplements = (dream.messages || [])
+    .filter(m => m.role === 'user' && !m.pending && !m.command && perspectiveOf(m) !== excludePerspective)
+    .map(m => (m.content || '').trim())
+    .filter(t => t && !t.startsWith('我记录了一个梦：') && !isControlText(t));
+  return `【梦的内容】\n${dream.content}\n\n` +
+    (meta.length ? `【原始补充】\n${meta.join('\n')}\n\n` : '') +
+    (supplements.length ? `【我后来补充的事实与感受】\n${supplements.join('\n')}\n\n` : '');
+}
+
+function retrieveFolkEntries(dream) {
+  if (!FOLK_CORPUS.length) return [];
+  const text = buildDreamBrief(dream);
+  const safetyIds = ['qianfulun-individual-difference', 'qianfulun-dont-overtrust'];
+  const genericTags = new Set(['梦象', '动作', '分类', '原则', '方法', '成因', '态度', '总纲', '文献', '现代阐释', '健康', '身体', '个体差异', '反省', '理性', '安慰']);
+  const scored = FOLK_CORPUS.filter(e => !safetyIds.includes(e.id)).map(e => {
+    let score = 0;
+    (e.tags || []).filter(tag => !genericTags.has(tag)).forEach(tag => {
+      if (tag && text.includes(tag)) score += tag.length === 1 ? 3 : 7;
+    });
+    return { entry: e, score };
+  }).filter(x => x.score > 0).sort((a, b) => b.score - a.score);
+  let chosen = scored.slice(0, 2).map(x => x.entry);
+  if (!chosen.length) {
+    chosen = FOLK_CORPUS.filter(e => ['liezi-dream-cause', 'qianfulun-thought-dream'].includes(e.id));
+  } else if (chosen.length < 2) {
+    const filler = FOLK_CORPUS.find(e => ['liezi-dream-cause', 'qianfulun-thought-dream'].includes(e.id) && !chosen.some(x => x.id === e.id));
+    if (filler) chosen.push(filler);
+  }
+  safetyIds.forEach(id => {
+    const item = FOLK_CORPUS.find(e => e.id === id);
+    if (item && !chosen.some(e => e.id === id)) chosen.push(item);
+  });
+  return chosen.slice(0, 4);
+}
+
+function folkContext(entries) {
+  if (!entries.length) return '';
+  return '【古代语料：具体古文和出处只能使用以下内容】\n' + entries.map((e, i) =>
+    `${i + 1}. ${e.title}\n来源：${e.source.work}（${e.source.era}）\n原文/研究表述：${e.quote}\n白话：${e.paraphrase}\n使用提醒：${e.note}`
+  ).join('\n\n') + '\n\n';
+}
+
+function buildIndependentHistory(dream, perspective) {
+  const entries = perspective === 'folk' ? retrieveFolkEntries(dream) : [];
+  const instruction = `追问已经结束。请从「${PERSPECTIVES[perspective].label}」视角独立生成一篇解读：只依据上面的梦境和我补充的事实，不沿用、不复述任何其他视角的 AI 结论。`;
+  return [
+    { role: 'system', content: PERSPECTIVES[perspective].prompt },
+    { role: 'user', content: buildDreamBrief(dream) + folkContext(entries) + instruction },
+  ];
+}
+
+function buildPerspectiveHistory(dream, perspective, independent) {
+  if (independent) return buildIndependentHistory(dream, perspective);
+  if (perspective === 'psychology') {
+    return [{ role: 'system', content: SYSTEM_PROMPT }].concat(
+      dream.messages.filter(m => !m.pending && perspectiveOf(m) === 'psychology')
+        .map(m => ({ role: m.role, content: m.content }))
+    );
+  }
+  const entries = perspective === 'folk' ? retrieveFolkEntries(dream) : [];
+  const history = [
+    { role: 'system', content: PERSPECTIVES[perspective].prompt },
+    { role: 'user', content: buildDreamBrief(dream, perspective) + folkContext(entries) +
+      `以下是「${PERSPECTIVES[perspective].label}」视角的已有对话，请只衔接这一视角，回答我最新的补充，不要带入其他视角的 AI 结论。` },
+  ];
+  dream.messages.filter(m => !m.pending && perspectiveOf(m) === perspective)
+    .forEach(m => history.push({ role: m.role, content: m.content }));
+  return history;
+}
+
 /* ---------- 模型调用：优先浏览器直连，其次服务器代理 ---------- */
 const DIRECT_API = 'https://api.deepseek.com/chat/completions';
 const KEY_STORE = 'dreamJournal.apiKey';
@@ -414,22 +549,31 @@ function startInterpretation(dream, mode) {
   if (!dream.messages) dream.messages = [];
   if (dream.messages.length > 0) { renderChat(); return; }
   const msgs = buildInitialMessages(dream, mode);
-  dream.messages.push({ role: 'user', content: msgs[1].content, ts: Date.now() });
+  dream.messages.push({ role: 'user', content: msgs[1].content, ts: Date.now(), perspective: 'psychology' });
   saveData();
   renderChat();
-  runAssistant(dream);
+  runAssistant(dream, { perspective: 'psychology' });
 }
 
-async function runAssistant(dream) {
+async function runAssistant(dream, options = {}) {
   if (state.sending) return;
+  const perspective = options.perspective || perspectiveOf(dream.messages[dream.messages.length - 1]);
+  let sources = [];
   state.sending = true;
   updateSendBtn();
-  const placeholder = { role: 'assistant', content: '', ts: Date.now(), pending: true };
+  const placeholder = { role: 'assistant', content: '', ts: Date.now(), pending: true, perspective, sources };
   dream.messages.push(placeholder);
   renderChatMessages(dream);
   try {
-    const history = [{ role: 'system', content: SYSTEM_PROMPT }]
-      .concat(dream.messages.filter(m => !m.pending).map(m => ({ role: m.role, content: m.content })));
+    if (perspective === 'folk') {
+      await folkCorpusReady;
+      if (!FOLK_CORPUS.length) throw new Error('古代语料库还没有加载成功，请检查网络后刷新再试');
+      sources = retrieveFolkEntries(dream)
+        .map(e => ({ title: e.source.work, url: e.source.url }))
+        .filter((s, i, arr) => arr.findIndex(x => x.url === s.url) === i);
+      placeholder.sources = sources;
+    }
+    const history = buildPerspectiveHistory(dream, perspective, !!options.independent);
     const full = await callAI(history, (_d, acc) => {
       placeholder.content = acc;
       renderChatMessages(dream, true);
@@ -452,13 +596,36 @@ function updateSendBtn() {
   btn.textContent = state.sending ? '解读中…' : '发送';
 }
 
+function perspectiveBadgeHtml(m) {
+  const p = perspectiveOf(m);
+  if (p === 'psychology' && !isReport(m.content)) return '';
+  const meta = PERSPECTIVES[p];
+  return `<div class="perspective-badge ${p}">${meta.icon} ${meta.label}</div>`;
+}
+
+function sourcesHtml(m) {
+  if (m.pending || !m.sources || !m.sources.length) return '';
+  return `<div class="report-sources">语料出处：${m.sources.map((s, i) =>
+    `<a href="${escapeHtml(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.title)}${i < m.sources.length - 1 ? ' · ' : ''}</a>`
+  ).join('')}</div>`;
+}
+
+function perspectiveSwitchHtml(m, idx) {
+  if (!isReport(m.content) || m.pending || m.error) return '';
+  const current = perspectiveOf(m);
+  return `<div class="perspective-switch"><span>换个视角</span><div class="perspective-options">${Object.entries(PERSPECTIVES).map(([key, meta]) => {
+    const active = key === current;
+    return `<button type="button" class="perspective-btn ${active ? 'active' : ''}" data-perspective="${key}" data-idx="${idx}" ${active ? 'disabled aria-pressed="true"' : 'aria-pressed="false"'}>${meta.icon} ${meta.label}</button>`;
+  }).join('')}</div></div>`;
+}
+
 function msgActionsHtml(dream, m, idx) {
   if (m.role !== 'assistant' || m.pending || m.error) return '';
   const fb = m.feedback;
   const isLast = idx === dream.messages.length - 1;
   const copyBtn = isReport(m.content)
     ? `<button class="fb-btn" data-copy="${idx}">📋 复制这篇解读</button>` : '';
-  return `<div class="msg-actions">
+  return sourcesHtml(m) + perspectiveSwitchHtml(m, idx) + `<div class="msg-actions">
     ${copyBtn}
     <button class="fb-btn ${fb === 'resonant' ? 'on' : ''}" data-fb="resonant" data-idx="${idx}">😊 有共鸣</button>
     <button class="fb-btn ${fb === 'unsure' ? 'on' : ''}" data-fb="unsure" data-idx="${idx}">🤔 不确定</button>
@@ -544,7 +711,9 @@ function interpretationHtml(content) {
 /* 是否是一篇完整报告（含 Markdown 小标题） */
 function isReport(content) {
   const t = (content || '');
-  return DETAIL_HEADING_RE.test(t) || (/^##\s/m.test(t) && /梦境主线|情绪脉络|核心意象/.test(t));
+  return DETAIL_HEADING_RE.test(t) ||
+    (/^##\s/m.test(t) && /梦境主线|情绪脉络|核心意象/.test(t)) ||
+    /\*\*(?:古人怎么理解|这些说法为什么不一样|这个梦可能怎样形成|哪些细节不必过度解释)\*\*/.test(t);
 }
 
 /* 新版只复制第一屏的简洁解读；旧版仍从第一个小标题开始复制 */
@@ -593,8 +762,11 @@ function renderChatMessages(dream, keepScroll) {
       ? '<p class="typing">正在读你的梦 ……</p>'
       : interpretationHtml(parts.text) + (m.pending ? '<p class="typing">▍</p>' : '') +
         optionsHtml(parts.options, i, parts.text, m.pending || !isLast);
-    return `<div class="msg assistant">${body}${msgActionsHtml(dream, m, i)}</div>`;
+    return `<div class="msg assistant ${perspectiveOf(m)}">${perspectiveBadgeHtml(m)}${body}${msgActionsHtml(dream, m, i)}</div>`;
   }).join('');
+  box.querySelectorAll('[data-perspective]').forEach(b => b.addEventListener('click', () => {
+    switchPerspective(dream, Number(b.dataset.idx), b.dataset.perspective);
+  }));
   box.querySelectorAll('[data-fb]').forEach(b => b.addEventListener('click', () => {
     const m = dream.messages[Number(b.dataset.idx)];
     if (!m) return;
@@ -641,16 +813,39 @@ function renderChatMessages(dream, keepScroll) {
   }
 }
 
-function regenerate(dream) {
-  if (state.sending) return;
+function switchPerspective(dream, idx, perspective) {
+  if (state.sending || !PERSPECTIVES[perspective]) return;
+  const source = dream.messages[idx];
+  if (!source) return;
+  if (perspectiveOf(source) === perspective) {
+    toast(`这篇已经是「${PERSPECTIVES[perspective].label}」`);
+    return;
+  }
   dream.messages.push({
     role: 'user',
-    content: '请换一个角度重新解读这个梦：给出与之前不同的可能性，保持同样的报告结构，并参考我标记过的共鸣反馈。',
+    content: `请从「${PERSPECTIVES[perspective].label}」独立解读这个梦，不要沿用其他视角的 AI 结论。`,
     ts: Date.now(),
+    command: true,
+    perspective,
   });
   saveData();
   renderChatMessages(dream);
-  runAssistant(dream);
+  runAssistant(dream, { perspective, independent: true });
+}
+
+function regenerate(dream) {
+  if (state.sending) return;
+  const perspective = perspectiveOf(dream.messages[dream.messages.length - 1]);
+  dream.messages.push({
+    role: 'user',
+    content: `请换一个角度，从「${PERSPECTIVES[perspective].label}」视角重新解读这个梦：给出与之前不同的可能性，保持这一视角的报告结构，并参考我补充过的信息。`,
+    ts: Date.now(),
+    command: true,
+    perspective,
+  });
+  saveData();
+  renderChatMessages(dream);
+  runAssistant(dream, { perspective });
 }
 
 function renderChat() {
@@ -703,11 +898,12 @@ function sendUserMessage() {
   if (!dream || state.sending) return;
   const text = $('#chat-input').value.trim();
   if (!text) return;
+  const perspective = perspectiveOf(dream.messages[dream.messages.length - 1]);
   $('#chat-input').value = '';
-  dream.messages.push({ role: 'user', content: text, ts: Date.now() });
+  dream.messages.push({ role: 'user', content: text, ts: Date.now(), perspective });
   saveData();
   renderChatMessages(dream);
-  runAssistant(dream);
+  runAssistant(dream, { perspective });
 }
 
 /* ---------- 档案 ---------- */
@@ -751,8 +947,9 @@ function openDreamDetail(id) {
   $('#detail-messages').innerHTML = msgs.length
     ? msgs.map((m, i) => {
         const parts = splitOptions(m.content);
+        const meta = PERSPECTIVES[perspectiveOf(m)];
         const copy = isReport(m.content) ? `<button class="dm-copy" type="button" data-dmi="${i}">复制</button>` : '';
-        return `<div class="dm"><div class="dm-role">解读 ${i + 1}${m.feedback ? ' · ' + ({ resonant: '有共鸣', unsure: '不确定', notme: '不太像我' }[m.feedback] || '') : ''}${copy}</div>${interpretationHtml(parts.text)}</div>`;
+        return `<div class="dm"><div class="dm-role"><span>${meta.icon} ${meta.label} · 解读 ${i + 1}${m.feedback ? ' · ' + ({ resonant: '有共鸣', unsure: '不确定', notme: '不太像我' }[m.feedback] || '') : ''}</span>${copy}</div>${interpretationHtml(parts.text)}${sourcesHtml(m)}</div>`;
       }).join('')
     : '<p class="empty-sub">还没有解读记录。</p>';
   $('#detail-messages').querySelectorAll('[data-dmi]').forEach(btn => btn.addEventListener('click', async () => {
