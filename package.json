@@ -1,0 +1,12 @@
+{
+  "name": "dream-journal",
+  "version": "1.0.0",
+  "private": true,
+  "description": "梦境手记：记录梦境，与 AI 一起温和地探索梦的含义。",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

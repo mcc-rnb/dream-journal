@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0d1126">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="梦境手记：记录梦境，与 AI 一起温和地探索梦的含义。">
+<title>梦境手记 · 你的解梦助手</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🌙</text></svg>">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="app">
+
+  <header class="app-header">
+    <div class="header-inner">
+      <span class="logo">🌙</span>
+      <div class="header-text">
+        <h1>梦境手记</h1>
+        <p id="header-sub">把梦记下来，再慢慢读懂它</p>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+
+    <!-- ============ 记梦 ============ -->
+    <section id="view-home" class="view">
+      <div class="card greeting-card">
+        <p id="greeting" class="greeting"></p>
+        <p class="greeting-sub">梦醒后的几分钟最容易遗忘，趁现在写下来。</p>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">记录一个梦</h2>
+
+        <label class="field">
+          <span class="field-label">给这个梦起个名字（可留空）</span>
+          <input id="f-title" type="text" maxlength="40" placeholder="例如：回不去的老房子">
+        </label>
+
+        <label class="field">
+          <span class="field-label">梦的内容 <em>*</em></span>
+          <div class="textarea-wrap">
+            <textarea id="f-content" rows="7" placeholder="按你记得的顺序写就好：人物、地点、发生了什么、最后的画面……不用写得完整，片段也可以。"></textarea>
+            <button id="btn-voice" class="voice-btn" type="button" title="语音输入" hidden>🎤</button>
+          </div>
+        </label>
+
+        <div class="field">
+          <span class="field-label">梦里或醒来时的情绪（可多选）</span>
+          <div id="f-moods" class="chip-row"></div>
+        </div>
+
+        <div class="field">
+          <span class="field-label">记忆清晰度</span>
+          <div id="f-clarity" class="chip-row"></div>
+        </div>
+
+        <label class="field">
+          <span class="field-label">标签（用逗号分隔，方便以后找规律）</span>
+          <input id="f-tags" type="text" placeholder="例如：考试, 追赶, 水, 前任">
+        </label>
+
+        <details class="more-fields">
+          <summary>更多背景（选填，能让解读更贴近你）</summary>
+          <label class="field">
+            <span class="field-label">梦里的人或场景让你联想到什么？</span>
+            <textarea id="f-assoc" rows="2" placeholder="例如：那个背影有点像我父亲；那条路像小学放学回家的路。没有特别联想可以留空。"></textarea>
+          </label>
+          <label class="field">
+            <span class="field-label">睡前或最近在想什么？</span>
+            <input id="f-presleep" type="text" placeholder="例如：最近在赶一个截止日期；和某个人闹了矛盾。">
+          </label>
+        </details>
+
+        <div class="btn-row">
+          <button id="btn-save" class="btn btn-ghost" type="button">仅保存</button>
+          <button id="btn-save-chat" class="btn btn-primary" type="button">保存并开始解读</button>
+        </div>
+      </div>
+
+      <div class="card recent-card">
+        <div class="card-title-row">
+          <h2 class="card-title">最近的梦</h2>
+          <button class="link-btn" data-go="archive">全部档案 →</button>
+        </div>
+        <div id="recent-list" class="dream-list"></div>
+      </div>
+    </section>
+
+    <!-- ============ 解读对话 ============ -->
+    <section id="view-chat" class="view">
+      <div id="chat-empty" class="card empty-card">
+        <p class="empty-icon">💭</p>
+        <p>还没有正在解读的梦。</p>
+        <p class="empty-sub">先去记一个梦，或从档案里选择一个。</p>
+        <div id="chat-pick" class="dream-list"></div>
+      </div>
+
+      <div id="chat-main" hidden>
+        <div class="card dream-context" id="dream-context"></div>
+        <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-input-bar">
+          <textarea id="chat-input" rows="1" placeholder="补充细节、回答问题，或说「直接解读」……"></textarea>
+          <button id="btn-send" class="btn btn-primary btn-send" type="button">发送</button>
+        </div>
+        <p class="chat-hint">AI 解读仅供自我探索与娱乐参考，不是预言，也不构成医疗或心理诊断建议。</p>
+      </div>
+    </section>
+
+    <!-- ============ 档案 ============ -->
+    <section id="view-archive" class="view">
+      <div class="card">
+        <div class="search-wrap">
+          <input id="archive-search" type="search" placeholder="搜索梦的内容、标题、标签……">
+        </div>
+      </div>
+      <div id="archive-list" class="dream-list"></div>
+
+      <div id="dream-detail" class="card detail-card" hidden>
+        <div class="detail-head">
+          <h2 id="detail-title"></h2>
+          <button id="detail-close" class="link-btn" type="button">收起 ↑</button>
+        </div>
+        <div id="detail-meta" class="detail-meta"></div>
+        <div id="detail-content" class="detail-content"></div>
+        <div id="detail-assoc" class="detail-assoc"></div>
+        <div class="btn-row">
+          <button id="detail-chat" class="btn btn-primary" type="button">继续解读</button>
+          <button id="detail-edit" class="btn btn-ghost" type="button">编辑</button>
+          <button id="detail-delete" class="btn btn-danger" type="button">删除</button>
+        </div>
+        <h3 class="detail-sub-title">解读记录</h3>
+        <div id="detail-messages" class="detail-messages"></div>
+      </div>
+    </section>
+
+    <!-- ============ 回顾 ============ -->
+    <section id="view-insights" class="view">
+      <div class="stat-grid">
+        <div class="stat-card"><span id="stat-total" class="stat-num">0</span><span class="stat-label">记录的梦</span></div>
+        <div class="stat-card"><span id="stat-month" class="stat-num">0</span><span class="stat-label">本月</span></div>
+        <div class="stat-card"><span id="stat-streak" class="stat-num">0</span><span class="stat-label">连续天数</span></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">情绪分布</h2>
+        <div id="mood-bars" class="mood-bars"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">常出现的标签</h2>
+        <div id="tag-cloud" class="chip-row"></div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">本月记录日历</h2>
+        <div id="calendar" class="calendar"></div>
+        <p class="empty-sub" id="calendar-empty" hidden>这个月还没有记录。</p>
+      </div>
+
+      <div class="card">
+        <div class="card-title-row">
+          <h2 class="card-title">近 7 天小结</h2>
+          <button id="btn-weekly" class="btn btn-ghost btn-small" type="button">生成小结</button>
+        </div>
+        <p class="empty-sub">把最近一周的梦放在一起看，可能会发现白天没注意到的线索。</p>
+        <div id="weekly-result" class="weekly-result"></div>
+      </div>
+    </section>
+
+    <!-- ============ 我的 ============ -->
+    <section id="view-me" class="view">
+      <div class="card">
+        <h2 class="card-title">数据管理</h2>
+        <p class="empty-sub">所有梦境只保存在这台设备的浏览器里，不会上传到任何服务器。记得定期导出备份。</p>
+        <div class="btn-row btn-column">
+          <button id="btn-export" class="btn btn-ghost" type="button">导出备份（JSON）</button>
+          <button id="btn-import" class="btn btn-ghost" type="button">导入备份</button>
+          <input id="import-file" type="file" accept="application/json,.json" hidden>
+          <button id="btn-clear" class="btn btn-danger" type="button">清空全部数据</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">连接状态</h2>
+        <p class="empty-sub">AI 解读通过服务器安全调用，密钥不会出现在网页里。</p>
+        <div class="btn-row">
+          <button id="btn-ping" class="btn btn-ghost" type="button">检查 AI 连接</button>
+          <span id="ping-result" class="ping-result"></span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 class="card-title">隐私与说明</h2>
+        <ul class="note-list">
+          <li>梦境记录保存在你的浏览器本地；清除浏览器数据会一并清除，请先导出备份。</li>
+          <li>只有当你主动发起解读时，当前这一个梦的内容才会被发送给 AI 服务用于生成回复。</li>
+          <li>解梦是一种自我探索和娱乐方式：AI 会给出几种可能的理解，但没有任何解释是确定的答案，更不能预测未来。</li>
+          <li>如果长期反复噩梦、严重失眠或因此明显影响生活，建议寻求专业的睡眠或心理支持。</li>
+        </ul>
+        <p class="version">梦境手记 v1.0 · 为一个人而做 🌙</p>
+      </div>
+    </section>
+
+  </main>
+
+  <nav class="tabbar">
+    <button class="tab active" data-view="home"><span>📝</span>记梦</button>
+    <button class="tab" data-view="chat"><span>💬</span>解读</button>
+    <button class="tab" data-view="archive"><span>🗂️</span>档案</button>
+    <button class="tab" data-view="insights"><span>✨</span>回顾</button>
+    <button class="tab" data-view="me"><span>⚙️</span>我的</button>
+  </nav>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<div id="modal" class="modal-mask" hidden>
+  <div class="modal">
+    <p id="modal-text"></p>
+    <div class="btn-row">
+      <button id="modal-cancel" class="btn btn-ghost" type="button">取消</button>
+      <button id="modal-ok" class="btn btn-danger" type="button">确认</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
