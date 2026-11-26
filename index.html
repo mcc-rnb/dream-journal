@@ -103,6 +103,9 @@
       <div id="chat-main" hidden>
         <div class="card dream-context" id="dream-context"></div>
         <div id="chat-messages" class="chat-messages"></div>
+        <div class="chat-quick">
+          <button id="btn-report" type="button">够了，直接出完整报告 →</button>
+        </div>
         <div class="chat-input-bar">
           <textarea id="chat-input" rows="1" placeholder="补充细节、回答问题，或说「直接解读」……"></textarea>
           <button id="btn-send" class="btn btn-primary btn-send" type="button">发送</button>
@@ -186,8 +189,19 @@
       </div>
 
       <div class="card">
+        <h2 class="card-title">AI 密钥</h2>
+        <p class="empty-sub">这个网页自己直连 DeepSeek，不需要服务器。密钥只保存在这台设备的浏览器里，不会上传，也不包含在导出的备份文件里。</p>
+        <input id="key-input" type="password" placeholder="sk-…（粘贴你的 DeepSeek 密钥）" autocomplete="off" spellcheck="false">
+        <div class="btn-row">
+          <button id="btn-save-key" class="btn btn-primary" type="button">保存密钥</button>
+          <button id="btn-clear-key" class="btn btn-ghost" type="button">清除</button>
+          <span id="key-state" class="ping-result"></span>
+        </div>
+      </div>
+
+      <div class="card">
         <h2 class="card-title">连接状态</h2>
-        <p class="empty-sub">AI 解读通过服务器安全调用，密钥不会出现在网页里。</p>
+        <p class="empty-sub">填好密钥后点一下，确认这台设备能正常调用模型。</p>
         <div class="btn-row">
           <button id="btn-ping" class="btn btn-ghost" type="button">检查 AI 连接</button>
           <span id="ping-result" class="ping-result"></span>
